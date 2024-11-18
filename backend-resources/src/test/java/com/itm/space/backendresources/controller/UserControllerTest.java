@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itm.space.backendresources.api.request.UserRequest;
 import com.itm.space.backendresources.api.response.UserResponse;
 import com.itm.space.backendresources.service.UserService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +50,7 @@ class UserControllerIntegrationTest {
     private ObjectMapper objectMapper;
 
 
+
     /**
      * Проверяем создание пользователя
      */
@@ -83,6 +83,27 @@ class UserControllerIntegrationTest {
             // Проверяем, что сервисный метод createUser был вызван ровно один раз с нужными параметрами
             verify(userService, times(1))
                     .createUser(any(UserRequest.class));
+        }
+
+        /**
+         * Проверяет валидацию данных при создании пользователя
+         */
+        @Test
+        @WithMockUser(roles = {"MODERATOR"})
+        void shouldReturnBadRequest_WhenUserRequestIsInvalid() throws Exception {
+            UserRequest invalidUserRequest = new UserRequest(
+                    "", // Некорректное имя пользователя (пустая строка)
+                    "invalid_email", // Некорректный email
+                    "123", // Некорректный пароль (слишком короткий)
+                    "", // Пустое имя
+                    "" // Пустая фамилия
+            );
+
+            mockMvc.perform(post("/api/users")
+                            .with(SecurityMockMvcRequestPostProcessors.csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(invalidUserRequest)))
+                    .andExpect(status().isBadRequest()); // Ожидаем статус 400 Bad Request
         }
     }
 
@@ -150,7 +171,6 @@ class UserControllerIntegrationTest {
                     .andExpect(status().isOk()) // Ожидаем статус ответа 200 OK
                     .andExpect(jsonPath("$").isString()); // Проверяем, что возвращаемое значение - имя пользователя "testUser_ITM"
         }
-
 
         /**
          * Тест проверяет, что если неавторизованный пользователь пытается сделать запрос
