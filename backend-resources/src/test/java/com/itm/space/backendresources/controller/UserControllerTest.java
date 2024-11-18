@@ -1,7 +1,6 @@
 package com.itm.space.backendresources.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.itm.space.backendresources.BaseIntegrationTest;
 import com.itm.space.backendresources.api.request.UserRequest;
 import com.itm.space.backendresources.api.response.UserResponse;
 import com.itm.space.backendresources.service.UserService;
@@ -26,7 +25,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 
-@WebMvcTest(UserController.class) // Поднимаем контекст Spring, необх-й только для тестирования уровня веб MVC, т.е. контроллеров.
+/**
+ *  Интеграционные тесты для контроллера UserController, которые проверяют различные действия API.
+ *  Эти тесты имитируют работу контроллера в контексте Spring, проверяют взаимодействие
+ *  с сервисами, безопасность и корректность возврата данных.
+ *
+ *  @WebMvcTest(UserController.class): - Поднимает только контекст Spring MVC для тестирования контроллера.
+ *              Это значит, что мы тестируем только веб-слой приложения.
+ *
+ *  @MockMvc: Для имитации HTTP-запросов к контроллеру, позволяя проверять HTTP-ответы.
+ *
+ *  @MockBean UserService: Мокируем зависимость от UserService, чтобы изолировать
+ *              тестирование контроллера и не зависеть от реализации сервиса.
+ */
+@WebMvcTest(UserController.class)
 class UserControllerIntegrationTest {
 
     @Autowired
@@ -38,21 +50,22 @@ class UserControllerIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @BeforeEach
-    public void setUp() {
-        // Дополнительная настройка перед каждым тестом, если нужно
-    }
 
-
-
-    // Проверяем создание пользователя
+    /**
+     * Проверяем создание пользователя
+     */
     @Nested
     class Create {
 
         // по хорошему - нужно разнести на несколько тестов, но в учебных целях - минимизируем код
+        /**
+         * Проверяет, что авторизованный пользователь с ролью MODERATOR может создать нового пользователя.
+         * Используется CSRF-токен, так как это POST-запрос.
+         */
         @Test
         @WithMockUser(roles = {"MODERATOR"}) // Поскольку контроллер защищён (исп-ся @Secured), нам нужно авторизовать пользователя, чтобы успешно выполнить тесты => Мы добавили эту аннотацию к тестам, чтобы проверять, что методы доступны только пользователям с нужными ролями.
         void shouldCreateUserSuccessfully_WhenPassedCorrectParameters() throws Exception {
+            // Создаем объект запроса для создания пользователя
             UserRequest userRequest = new UserRequest(
                     "username_TestUser", // String username
                     "email_test@example.com", // String email
@@ -60,14 +73,14 @@ class UserControllerIntegrationTest {
                     "firstName_", // String firstName
                     "lastName_"); // String lastName
 
-            mockMvc.perform(post("/api/users") //  имитация HTTP POST запроса
-                            .with(SecurityMockMvcRequestPostProcessors.csrf()) // добавление CSRF токена
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(userRequest))
-                    )
-                    .andExpect(status().isOk()); // Проверяем, что статус ответа - OK (200)
+            // Выполняем POST запрос к /api/users с корректными данными и CSRF токеном
+            mockMvc.perform(post("/api/users")
+                            .with(SecurityMockMvcRequestPostProcessors.csrf()) // Добавляем CSRF токен для безопасности
+                            .contentType(MediaType.APPLICATION_JSON) // Указываем тип контента как JSON
+                            .content(objectMapper.writeValueAsString(userRequest))) // Передаем тело запроса
+                    .andExpect(status().isOk()); // Ожидаем статус ответа 200 OK, если все успешно
 
-            // Проверяем, что сервисный метод был вызван ровно 1 раз с нужными параметрами
+            // Проверяем, что сервисный метод createUser был вызван ровно один раз с нужными параметрами
             verify(userService, times(1))
                     .createUser(any(UserRequest.class));
         }
@@ -75,10 +88,16 @@ class UserControllerIntegrationTest {
 
 
 
-    // Проверяет получение информации о пользователе по его идентификатору
+    /**
+     * Проверяет получение информации о пользователе по его идентификатору
+     */
     @Nested
     class GetUserById {
 
+        /**
+         * Проверяет, что информация о пользователе корректно возвращается,
+         * если пользователь с ролью MODERATOR делает запрос.
+         */
         @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldReturnUserResponse_WhenCalledMethodGetUserById_AndUserWasSuccessfullyFound() throws Exception {
@@ -87,60 +106,64 @@ class UserControllerIntegrationTest {
 
             // Создаем ответ, который будет возвращен сервисом
             UserResponse userResponse = new UserResponse(
-                    "firstName_", // String firstName
-                    "lastName_", // String lastName
-                    "email_test@example.com", // String email
-                    List.of("ROLE_USER"), // List<String> roles
-                    List.of("TESTED_GROUP_A", "TESTED_GROUP_B") // List<String> groups
+                    "firstName_", // Имя пользователя
+                    "lastName_", // Фамилия пользователя
+                    "email_test@example.com", // Email пользователя
+                    List.of("ROLE_USER"), // Роли пользователя
+                    List.of("TESTED_GROUP_A", "TESTED_GROUP_B") // Группы пользователя
             );
 
             // Мокаем поведение userService, чтобы вернуть UserResponse с предопределёнными значениями
-            when(userService.getUserById(userId))
-                    .thenReturn(userResponse);
+            when(userService.getUserById(userId)).thenReturn(userResponse);
 
-            // Выполняем GET-запрос и проверяем, что полученные данные совпадают с ожидаемыми
-            mockMvc.perform(get("/api/users/{id}", userId) // имитация HTTP GET запроса
+            // Выполняем GET-запрос и проверяем, что данные совпадают с ожидаемыми
+            mockMvc.perform(get("/api/users/{id}", userId)
                             .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isOk()) // Проверяем, что статус ответа - OK (200)
-                    .andExpect(jsonPath("$.firstName").value("firstName_")) // Проверяем, что в ответе содержится корректное имя
-                    .andExpect(jsonPath("$.lastName").value("lastName_")) // Проверяем, что в ответе содержится корректная фамилия
-                    .andExpect(jsonPath("$.email").value("email_test@example.com")) // Проверяем, что в ответе содержится корректный email
-                    .andExpect(jsonPath("$.roles[0]").value("ROLE_USER")) // Проверяем, что роль корректная
+                    .andExpect(status().isOk()) // Ожидаем статус ответа 200 OK
+                    .andExpect(jsonPath("$.firstName").value("firstName_")) // Проверяем имя пользователя
+                    .andExpect(jsonPath("$.lastName").value("lastName_")) // Проверяем фамилию пользователя
+                    .andExpect(jsonPath("$.email").value("email_test@example.com")) // Проверяем email
+                    .andExpect(jsonPath("$.roles[0]").value("ROLE_USER")) // Проверяем первую роль
                     .andExpect(jsonPath("$.groups[0]").value("TESTED_GROUP_A")) // Проверяем первую группу
                     .andExpect(jsonPath("$.groups[1]").value("TESTED_GROUP_B")); // Проверяем вторую группу
         }
     }
 
 
-    // Проверяет метод hello, который возвращает имя текущего пользователя
+
+    /**
+     * Проверяет метод hello, который возвращает имя текущего пользователя
+     */
     @Nested
     class Hello {
 
         /**
-         * Тест Hello будет проверять не только статус ответа,
-         * но и значение возвращаемого имени пользователя, что делает проверку более точной и полной
-         * @throws Exception ошибка
+         * Тест проверяет, что текущий авторизованный пользователь с именем testUser_ITM может получить свое имя.
+         * Метод hello возвращает имя текущего пользователя.
          */
         @Test
         @WithMockUser(username = "testUser_ITM", roles = "MODERATOR")
         void shouldReturnReturnNameOfCurrentUse_WhenThisMethodWasCalled() throws Exception {
+            // Выполняем GET-запрос к /api/users/hello и проверяем статус ответа и возвращаемое значение
             mockMvc.perform(get("/api/users/hello")
                             .contentType(MediaType.APPLICATION_JSON))
-                    .andExpect(status().isOk()) // Проверяем, что статус ответа - OK (200)
+                    .andExpect(status().isOk()) // Ожидаем статус ответа 200 OK
                     .andExpect(jsonPath("$").isString()); // Проверяем, что возвращаемое значение - имя пользователя "testUser_ITM"
         }
 
 
         /**
-         * Тест проверяет, что если неавторизованный пользователь пытается сделать запрос к защищенному ресурсу (в данном случае к /api/users), сервер отвечает 403 Forbidden.
+         * Тест проверяет, что если неавторизованный пользователь пытается сделать запрос
+         * к защищенному ресурсу (в данном случае к /api/users), сервер отвечает 403 Forbidden.
          * @throws Exception ошибка
          */
         @Test
         void shouldReturnForbidden_WhenUnauthorized() throws Exception {
+            // Выполняем POST-запрос к /api/users без авторизации
             mockMvc.perform(post("/api/users")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{}"))
-                    .andExpect(status().isForbidden()); // Проверяем, что неавторизованный пользователь получает 403 Forbidden
+                            .content("{}")) // Пустое тело
+                    .andExpect(status().isForbidden()); // Ожидаем статус ответа 403 Forbidden
         }
     }
 }
