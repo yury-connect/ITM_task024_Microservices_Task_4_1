@@ -1,17 +1,16 @@
 package com.itm.space.backendresources.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itm.space.backendresources.BaseIntegrationTest;
 import com.itm.space.backendresources.api.request.UserRequest;
 import com.itm.space.backendresources.api.response.UserResponse;
 import com.itm.space.backendresources.service.UserService;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.http.MediaType;
 
 import java.util.List;
@@ -29,19 +28,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *  Эти тесты имитируют работу контроллера в контексте Spring, проверяют взаимодействие
  *  с сервисами, безопасность и корректность возврата данных.
  *
- *  @WebMvcTest(UserController.class): - Поднимает только контекст Spring MVC для тестирования контроллера.
- *              Это значит, что мы тестируем только веб-слой приложения.
- *
  *  @MockMvc: Для имитации HTTP-запросов к контроллеру, позволяя проверять HTTP-ответы.
  *
  *  @MockBean UserService: Мокируем зависимость от UserService, чтобы изолировать
  *              тестирование контроллера и не зависеть от реализации сервиса.
  */
-@WebMvcTest(UserController.class)
-class UserControllerIntegrationTest {
-
-    @Autowired
-    private MockMvc mockMvc;
+class UserControllerIntegrationTest extends BaseIntegrationTest {
 
     @MockBean
     private UserService userService;
@@ -74,7 +66,7 @@ class UserControllerIntegrationTest {
                     "lastName_"); // String lastName
 
             // Выполняем POST запрос к /api/users с корректными данными и CSRF токеном
-            mockMvc.perform(post("/api/users")
+            mvc.perform(post("/api/users")
                             .with(SecurityMockMvcRequestPostProcessors.csrf()) // Добавляем CSRF токен для безопасности
                             .contentType(MediaType.APPLICATION_JSON) // Указываем тип контента как JSON
                             .content(objectMapper.writeValueAsString(userRequest))) // Передаем тело запроса
@@ -99,7 +91,7 @@ class UserControllerIntegrationTest {
                     "" // Пустая фамилия
             );
 
-            mockMvc.perform(post("/api/users")
+            mvc.perform(post("/api/users")
                             .with(SecurityMockMvcRequestPostProcessors.csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(invalidUserRequest)))
@@ -138,7 +130,7 @@ class UserControllerIntegrationTest {
             when(userService.getUserById(userId)).thenReturn(userResponse);
 
             // Выполняем GET-запрос и проверяем, что данные совпадают с ожидаемыми
-            mockMvc.perform(get("/api/users/{id}", userId)
+            mvc.perform(get("/api/users/{id}", userId)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk()) // Ожидаем статус ответа 200 OK
                     .andExpect(jsonPath("$.firstName").value("firstName_")) // Проверяем имя пользователя
@@ -166,7 +158,7 @@ class UserControllerIntegrationTest {
         @WithMockUser(username = "testUser_ITM", roles = "MODERATOR")
         void shouldReturnReturnNameOfCurrentUse_WhenThisMethodWasCalled() throws Exception {
             // Выполняем GET-запрос к /api/users/hello и проверяем статус ответа и возвращаемое значение
-            mockMvc.perform(get("/api/users/hello")
+            mvc.perform(get("/api/users/hello")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk()) // Ожидаем статус ответа 200 OK
                     .andExpect(jsonPath("$").isString()); // Проверяем, что возвращаемое значение - имя пользователя "testUser_ITM"
@@ -175,14 +167,24 @@ class UserControllerIntegrationTest {
         /**
          * Тест проверяет, что если неавторизованный пользователь пытается сделать запрос
          * к защищенному ресурсу (в данном случае к /api/users), сервер отвечает 403 Forbidden.
-         * @throws Exception ошибка
          */
         @Test
-        void shouldReturnForbidden_WhenUnauthorized() throws Exception {
-            // Выполняем POST-запрос к /api/users без авторизации
-            mockMvc.perform(post("/api/users")
+        @WithMockUser(roles = "USER") // Пользователь аутентифицирован, но не имеет роли MODERATOR
+        void shouldReturnForbidden_WhenAuthenticatedButWithoutPermission() throws Exception {
+            // Создаем объект запроса для создания пользователя с корректными данными
+            UserRequest userRequest = new UserRequest(
+                    "username_TestUser", // Имя пользователя
+                    "email_test@example.com", // Email
+                    "password_", // Пароль
+                    "firstName_", // Имя
+                    "lastName_" // Фамилия
+            );
+
+            // Выполняем POST-запрос к /api/users, используя аутентифицированного пользователя без нужной роли
+            mvc.perform(post("/api/users")
+                            .with(SecurityMockMvcRequestPostProcessors.csrf()) // Добавляем CSRF токен для безопасности
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{}")) // Пустое тело
+                            .content(objectMapper.writeValueAsString(userRequest)))
                     .andExpect(status().isForbidden()); // Ожидаем статус ответа 403 Forbidden
         }
     }
