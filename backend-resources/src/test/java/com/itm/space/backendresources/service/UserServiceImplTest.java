@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+
 @SpringBootTest
 @AutoConfigureMockMvc
 class UserServiceImplTest extends BaseIntegrationTest {
@@ -96,6 +97,8 @@ class UserServiceImplTest extends BaseIntegrationTest {
 //            // Проверяем, что метод createUser выполняется без выброса исключений
 //            assertDoesNotThrow(() -> userService.createUser(userRequest));
 //        }
+
+
 
         @Test
         void createUser_KeycloakException() {
