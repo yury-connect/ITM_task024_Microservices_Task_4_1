@@ -26,7 +26,8 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
 
     private final Keycloak keycloak;
 
-    private String createdUserId;
+    private String createdUserId; // ID созданного в очередном методе юзера, нужен для его удаления перед запуском последующего теста
+
 
 
     @Autowired
@@ -35,10 +36,14 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
     }
 
 
+
+    // *** Группа тестов для создания пользователей ***
     @Nested
     class UserCreationTests {
 
-        @Test
+        /**
+         * Проверяет успешное создание пользователя, если пользователя еще не существует в базе данных.
+         */ @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldCreateUserSuccessfully_WhenUserDoesNotExist() throws Exception {
 
@@ -52,7 +57,10 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
         }
 
 
-        @Test
+        /**
+         * Проверяет, что при попытке создать дублирующего пользователя
+         * (с тем же именем) возвращается статус 409 Conflict.
+         */  @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldReturnConflictStatus_WhenTryingToCreateDuplicateUser() throws Exception {
 
@@ -71,8 +79,10 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
             createdUserId = findUserIdByUsername(userRequest.getUsername());
         }
 
-        //  Проверка создания пользователя с некорректным username:
-        @Test
+
+        /**
+         * Проверяет, что создание пользователя с некорректным именем возвращает статус 400 Bad Request.
+         */        @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldReturnBadRequest_WhenUsernameIsInvalid() throws Exception {
             // Невалидные значения для username, которые мы хотим проверить
@@ -97,7 +107,10 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
             }
         }
 
-        // Проверка создания пользователя с невалидным email:
+
+        /**
+         * Проверяет, что создание пользователя с некорректным email возвращает статус 400 Bad Request.
+         */
         @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldReturnBadRequest_WhenEmailIsInvalid() throws Exception {
@@ -125,7 +138,9 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
             }
         }
 
-        // Проверка создания пользователя с коротким паролем:
+        /**
+         * Проверяет, что создание пользователя с коротким паролем возвращает статус 400 Bad Request.
+         */
         @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldReturnBadRequest_WhenPasswordIsTooShort() throws Exception {
@@ -149,32 +164,39 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
     }
 
 
+    // *** Группа тестов для получения пользователей по ID ***
     @Nested
     class UserRetrievalByIdTests {
 
+        /**
+         * Проверяет, что информация о существующем пользователе корректно возвращается.
+         */
         @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldReturnUserDetails_WhenUserExists() throws Exception {
-
             UUID userId = UUID.fromString("60208bfd-25c0-49c6-8139-8059d997eeda");
 
+            // Выполняем GET-запрос на получение пользователя по ID
             mvc.perform(requestToJson(get("/api/users/{id}", userId)))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isOk()); // Ожидаем статус 200 OK
         }
 
+        /**
+         * Проверяет, что при запросе несуществующего пользователя возвращается ошибка сервера (статус 5xx).
+         */
         @Test
         @WithMockUser(roles = "MODERATOR")
         void shouldReturnServerError_WhenUserIsNotFound() throws Exception {
+            UUID userId = UUID.randomUUID(); // Генерируем случайный UUID, который, скорее всего, не существует
 
-            UUID userId =UUID.randomUUID();
-
+            // Выполняем GET-запрос и проверяем, что возвращается статус ошибки сервера (5xx)
             mvc.perform(requestToJson(get("/api/users/{id}", userId)))
                     .andExpect(status().is5xxServerError());
         }
     }
 
 
-    // Удаление созданного 'user' после каждого теста
+    // *** Удаление созданного пользователя после каждого теста ***
     @AfterEach
     public void deleteUserIfExists() {
         if (createdUserId != null) {
@@ -184,7 +206,11 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
 
 
 
-    // *** services methods ***
+    // *** Сервисные методы для создания запроса и поиска пользователей ***
+
+    /**
+     * Создает и возвращает объект запроса для создания нового пользователя с корректными значениями.
+     */
     private UserRequest createValidUserRequest() {
         return new UserRequest(
                 "username_", // String username
@@ -196,6 +222,9 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
     }
 
 
+    /**
+     * Находит и возвращает ID пользователя по его имени пользователя, используя Keycloak.
+     */
     private String findUserIdByUsername(String username) {
         return keycloak.realm("ITM")
                 .users()
@@ -204,4 +233,3 @@ class UserServiceImplIntegrationTest extends BaseIntegrationTest {
                 .getId(); // сохр. ID созданного 'user'
     }
 }
-
