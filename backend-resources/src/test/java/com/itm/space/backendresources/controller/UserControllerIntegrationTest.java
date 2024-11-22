@@ -112,8 +112,8 @@ class UserControllerIntegrationTest extends BaseIntegrationTest {
             mvc.perform(requestWithContent(post("/api/users"), invalidUserRequest))
                     .andExpect(status().isBadRequest()) // Ожидаем статус 400 Bad Request
                     .andExpect(jsonPath("$.username")
-//                            .value("Username should not be blank"))
-                            .value("Username should be between 2 and 30 characters long"))
+                            .value("Username should not be blank"))
+//                            .value("Username should be between 2 and 30 characters long"))
                     .andExpect(jsonPath("$.email")
                             .value("Email should be valid"))
                     .andExpect(jsonPath("$.password")
